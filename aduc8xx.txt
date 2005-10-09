@@ -1,0 +1,29 @@
+# ******************************************************************************
+#   PRECMA S.r.l.  -  Electronic Engineering  -  http://www.precma.com
+#       Progettazione Elettronica Controlli di Macchine Automatiche
+#
+# ADuC8xx Downloader
+# Analog Devices ADuC8xx family microcontrollers downloader
+#
+# Fausto Marzoli - faumarz@8052.it
+# Copyright (C)2005 PRECMA S.r.l. - FauMarz - http://www.precma.com/
+# ******************************************************************************
+
+This program is distributed under the GNU GPL license.
+
+Using perl module Device::SerialPort (http://sendpage.org/device-serialport/)
+
+Made to work with ADuC842, but should work with any other uC of the family, too (except the first versions with loader 1.0 installed onboard).
+Developed under Linux (SuSE 9.2); should work with Windows, too (using Win32::SerialPort module), BUT IT IS NOT TESTED YET.
+If you are using aduc8xx.pl under windows, please tell me (faumarz@8052.it).
+
+Accept and intelligently use multiple options. For example, you can blank and program the LPC device with one single command line:
+# aduc8xx.pl --echip --program dummy.hex
+
+When using aduc8xx.pl the first time, you will be asked for using the --port option. After the first successful using of the --port option, aduc8xx.pl writes its configuration in a hidden file named .aduc8xx.cgf in your home dir.
+Under Linux, usually the port to be used is /dev/tty0 or /dev/ttyUSB0 or something like this (be sure to have the rights to access the port!). Under windows should be some COM (COM2, or COM3 or something similar).
+
+If your PERL installation has not the Device::SerialPort module install, you will have to download and install it from
+http://sendpage.org/device-serialport/
+
+
