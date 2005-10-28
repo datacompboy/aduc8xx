@@ -9,6 +9,10 @@
 #
 # Developed under Linux (SuSE 9.2); should work with Windows, too (using
 # Win32::SerialPort module)
+#
+# -----------------------------------------------------------------------------
+# Version 0.2 (051028)
+# Try to support OSX
 # -----------------------------------------------------------------------------
 # Version 0.1 (051009)
 # First release
@@ -44,7 +48,7 @@ BEGIN
 
 #______________________________________________________________________Variables
 my $Prog = "ADuC8xx Programmer";
-my $Ver = "Version 0.1 (051009)";
+my $Ver = "Version 0.2 (051028)";
 my $Copyright = "Copyright 2005 PRECMA Srl, FauMarz";
 my $Use = "Usage: aduc8xx [--opt1 [arg1[,arg2]] ... --optn [arg1[,arg2]]]";
 
@@ -65,7 +69,6 @@ my $RecLen =0x10;               # 16 bytes programming record
 
 my $ACK = 0x06;
 my $NACK = 0x07;
-# my $TOP_ADDR = 0xF800;          # 62Kb
 my $TOP_ADDR;
 
 
@@ -148,26 +151,31 @@ $ob->save("$CfgFile");
 
 
 # When you start the device ISP mode, it sends 25 bytes: this read clears the buffer
-$ob->read_const_time(5);
-$Res = $ob->read(25);
+$ob->read_const_time(100);
+$ob->read_char_time(1);
+$Res = $ob->read(255);
 
 
 #___________________________________________________________Check for the device
+print "Detecting device ... ";
+system;
 $ob->write("!Z");
 $ob->write(chr(0x00));
 $ob->write(chr(0xA6));
 $Res = &strWaitResponse();
 if ($Res eq "")
 {
-    print "No device detected: please check connection and force the device in ISP mode\n";
+    print "Error\nNo device detected: please check connection and force the device in ISP mode\n";
     exit;
 }
 else
 {
-    print "Connected device: $Res\n";
+    print "done. Connected device: $Res\n";
+    system;
     # Gets the other 10 bytes of the start string (clears the buffer)
-    $ob->read_const_time(5);
-    $Res = $ob->read(10);
+    $ob->read_const_time(100);
+    $ob->read_char_time(1);
+    $Res = $ob->read(255);
 }
 system;
 
@@ -264,7 +272,7 @@ if ($optProgram ne "")
 
             $len = hex(substr($riga, 1, 2));
             $offset = hex(substr($riga, 3, 4));
-            # Se e' un data record lo legge
+            # If it is a data record, read it
             if ( (hex(substr($riga, 7, 2))) == 0 )
             {
                 for ($i = 0; $i < $len; $i++)
@@ -292,11 +300,11 @@ if ($optProgram ne "")
     }
 
     # Program micro
-    print "Programming device flash ROM...";
+    print "Programming device flash ROM ...";
     for ($i = 0; $i < $TOP_ADDR; $i += $RecLen)
     {
         $offset = strDecToHex24($i);
-        $len = strDecToHex8($RecLen+4);         # inlcudes command and 24bit address
+        $len = strDecToHex8($RecLen+4);         # includes command and 24bit address
         $riga = $len."57".$offset;              # "57" is the hex ascii code for 'W'
 
         $isTobeProg = 0;
@@ -376,7 +384,7 @@ if ($optData ne "")
 
             $len = hex(substr($riga, 1, 2));
             $offset = hex(substr($riga, 3, 4));
-            # Se e' un data record lo legge
+            # If it is a data record, read it
             if ( (hex(substr($riga, 7, 2))) == 0 )
             {
                 for ($i = 0; $i < $len; $i++)
@@ -407,7 +415,7 @@ if ($optData ne "")
     for ($i = 0; $i < $TOP_ADDR; $i += $RecLen)
     {
         $offset = strDecToHex24($i);
-        $len = strDecToHex8($RecLen+4);         # inlcudes command and 24bit address
+        $len = strDecToHex8($RecLen+4);         # includes command and 24bit address
         $riga = $len."45".$offset;              # "45" is the hex ascii code for 'E'
 
         $isTobeProg = 0;
@@ -510,20 +518,51 @@ sub strWaitResponse
 # Wait for a response with timeout
 # ------------------------------------------------------------------------------
 {
-    my ($count, $result, $message);
+my $timeout = 20;
+my $chars = 0;
+my $buffer = "";
+my @SplitBuf;
 
     $ob->read_interval(100) if ($OS_win);
-    $ob->read_const_time(10);
-    for ($count = 0; $count < 500; $count++)
+    $ob->read_const_time(50);
+    $ob->read_char_time(1);
+
+    while ($timeout > 0)
     {
-        $count, $result = $ob->read(1);
-        $message = "$message$result";
-        if ($result eq "\n")
+        my ($count,$saw) = $ob->read(255);    # will read _up to_ 255 chars
+        if ($count > 0)
         {
-            system;
-            return &Trim($message);
+            $chars+=$count;
+            $buffer.=$saw;
+            # Check here to see if what we want is in the $buffer
+            # say "last" if we find it
+            if ($buffer =~ "\n")
+            {
+                system;
+                @SplitBuf = split("\n", $buffer);
+                return &Trim($SplitBuf[0]);
+            }
+        }
+        else
+        {
+            $timeout--;
         }
     }
+
+#     my ($count, $result, $message);
+# 
+#     $ob->read_interval(100) if ($OS_win);
+#     $ob->read_const_time(10);
+#     for ($count = 0; $count < 500; $count++)
+#     {
+#         $count, $result = $ob->read(1);
+#         $message = "$message$result";
+#         if ($result eq "\n")
+#         {
+#             system;
+#             return &Trim($message);
+#         }
+#     }
 }
 
 
@@ -532,24 +571,53 @@ sub strWaitACK
 # Wait for ACK/NACK with timeout
 # ------------------------------------------------------------------------------
 {
-    my ($count, $result);
+my $timeout = 100;
+my $chars = 0;
+my $buffer = "";
 
     $ob->read_interval(100) if ($OS_win);
     $ob->read_const_time(10);
-    for ($count = 0; $count < 500; $count++)
+    $ob->read_char_time(0);
+
+    while ($timeout > 0)
     {
-        $count, $result = $ob->read(1);
-        if ($result eq chr($ACK))
+        my ($count,$saw) = $ob->read(255);    # will read _up to_ 255 chars
+        if ($count > 0)
         {
-            system;
-            return $ACK;
+            $chars+=$count;
+            $buffer.=$saw;
+            # Check here to see if what we want is in the $buffer
+            # say "last" if we find it
+            if ($buffer eq chr($ACK))
+            {
+                system;
+                return $ACK;
+            }
+            elsif ($buffer eq chr($NACK))
+            {
+                system;
+                return $NACK;
+            }
         }
-        elsif ($result eq chr($NACK))
+        else
         {
-            system;
-            return $NACK;
+            $timeout--;
         }
     }
+#     for ($count = 0; $count < 500; $count++)
+#     {
+#         $count, $result = $ob->read(1);
+#         if ($result eq chr($ACK))
+#         {
+#             system;
+#             return $ACK;
+#         }
+#         elsif ($result eq chr($NACK))
+#         {
+#             system;
+#             return $NACK;
+#         }
+#     }
 }
 
 
@@ -575,8 +643,8 @@ sub strDecToHex8
 # ------------------------------------------------------------------------------
 {
     my $hexnum;
-    $hexnum = sprintf("%2.2x", shift);  # Converte il numero in stringa HEX di 4 cifre
-    $hexnum =~ tr/a-z/A-Z/;             # Converte le lettere in maiuscole
+    $hexnum = sprintf("%2.2x", shift);  # Converts the number in a 2-char string, HEX format
+    $hexnum =~ tr/a-z/A-Z/;             # Uppercase
     return $hexnum;
 }
 
@@ -587,20 +655,20 @@ sub strDecToHex16
 # ------------------------------------------------------------------------------
 {
     my $hexnum;
-    $hexnum = sprintf("%4.4x", shift);  # Converte il numero in stringa HEX di 4 cifre
-    $hexnum =~ tr/a-z/A-Z/;             # Converte le lettere in maiuscole
+    $hexnum = sprintf("%4.4x", shift);  # Converts the number in a 4-char string, HEX format
+    $hexnum =~ tr/a-z/A-Z/;             # Uppercase
     return $hexnum;
 }
 
 
 sub strDecToHex24
 # ------------------------------------------------------------------------------
-# Convert a number into a 4 char ASCII HEX
+# Convert a number into a 6 char ASCII HEX
 # ------------------------------------------------------------------------------
 {
     my $hexnum;
-    $hexnum = sprintf("%6.6x", shift);  # Converte il numero in stringa HEX di 4 cifre
-    $hexnum =~ tr/a-z/A-Z/;             # Converte le lettere in maiuscole
+    $hexnum = sprintf("%6.6x", shift);  # Converts the number in a 6-char string, HEX format
+    $hexnum =~ tr/a-z/A-Z/;             # Uppercase
     return $hexnum;
 }
 
