@@ -11,6 +11,9 @@
 # Win32::SerialPort module)
 #
 # -----------------------------------------------------------------------------
+# Version 0.3 (051108)
+# Speed up initial checks
+# -----------------------------------------------------------------------------
 # Version 0.2 (051028)
 # Try to support OSX
 # -----------------------------------------------------------------------------
@@ -48,7 +51,7 @@ BEGIN
 
 #______________________________________________________________________Variables
 my $Prog = "ADuC8xx Programmer";
-my $Ver = "Version 0.2 (051028)";
+my $Ver = "Version 0.3 (051108)";
 my $Copyright = "Copyright 2005 PRECMA Srl, FauMarz";
 my $Use = "Usage: aduc8xx [--opt1 [arg1[,arg2]] ... --optn [arg1[,arg2]]]";
 
@@ -151,8 +154,8 @@ $ob->save("$CfgFile");
 
 
 # When you start the device ISP mode, it sends 25 bytes: this read clears the buffer
-$ob->read_const_time(100);
-$ob->read_char_time(1);
+$ob->read_const_time(50);
+#$ob->read_char_time(1);
 $Res = $ob->read(255);
 
 
@@ -173,8 +176,8 @@ else
     print "done. Connected device: $Res\n";
     system;
     # Gets the other 10 bytes of the start string (clears the buffer)
-    $ob->read_const_time(100);
-    $ob->read_char_time(1);
+    $ob->read_const_time(50);
+#    $ob->read_char_time(1);
     $Res = $ob->read(255);
 }
 system;
