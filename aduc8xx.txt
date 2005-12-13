@@ -25,5 +25,11 @@ Under Linux, usually the port to be used is /dev/tty0 or /dev/ttyUSB0 or somethi
 
 If your PERL installation has not the Device::SerialPort module install, you will have to download and install it from
 http://sendpage.org/device-serialport/
+----------------------------------------------------------
+IMPORTANT NOTE:
+Some ADuC derivates change the bootloader baud rate if you change the system clock from the default values.
+aduc8xx.pl uses a fixed baud rate of 9600 baud and can not use any other baud rate for initiating the communication: so you should use a system clock in order to have a 9600baud rate of the bootloader.
+
+If you use different, you should care of using available standard baud rates and you should modify the aduc8xx.pl source code in order to use it.
 
 

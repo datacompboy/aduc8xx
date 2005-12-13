@@ -7,9 +7,12 @@
 # In System Analog Devices AD842 (and others) microcontrollers programmer
 # Using perl module Device::SerialPort (http://sendpage.org/device-serialport/)
 #
-# Developed under Linux (SuSE 9.2); should work with Windows, too (using
+# Developed under Linux (SuSE 9.2 - 10.0); should work with Windows, too (using
 # Win32::SerialPort module)
 #
+# -----------------------------------------------------------------------------
+# Version 0.4 (051213)
+# Always erase before programming
 # -----------------------------------------------------------------------------
 # Version 0.3 (051108)
 # Speed up initial checks
@@ -51,7 +54,7 @@ BEGIN
 
 #______________________________________________________________________Variables
 my $Prog = "ADuC8xx Programmer";
-my $Ver = "Version 0.3 (051108)";
+my $Ver = "Version 0.4 (051213)";
 my $Copyright = "Copyright 2005 PRECMA Srl, FauMarz";
 my $Use = "Usage: aduc8xx [--opt1 [arg1[,arg2]] ... --optn [arg1[,arg2]]]";
 
@@ -183,6 +186,15 @@ else
 system;
 
 
+# Options that include others
+if  (
+($optProgram ne "") && ($optEflash eq "") && ($optEchip eq "")
+    )
+{
+    $optEflash = 1;
+}
+
+
 #_______________________________________________________________Erase Flash Only
 if ($optEflash)
 {
@@ -194,7 +206,7 @@ if ($optEflash)
     $ob->write("C");
     $ob->write(chr(0xBC));
     $Res = &strWaitACK();
-    
+
     if ($Res eq $ACK)
     {
         print "done\n";
@@ -223,7 +235,7 @@ if ($optEchip)
     $ob->write("A");
     $ob->write(chr(0xBE));
     $Res = &strWaitACK();
-    
+
     if ($Res eq $ACK)
     {
         print "done\n";
@@ -250,9 +262,10 @@ if ($optProgram ne "")
     my $riga;
     my $len;
     my $offset;
+    my $DonePages = 0;
 
     my $TOP_ADDR = 0xF800;          # 62Kb
-    
+
     # Fill the ROM with "00"
     for ($i = 0 ; $i < $TOP_ADDR+1; $i++)
     {
@@ -319,7 +332,7 @@ if ($optProgram ne "")
                 $isTobeProg = 1;
             }
         }
-        
+
         # If it is a page to be programmed, send it
         if ($isTobeProg)
         {
@@ -330,11 +343,12 @@ if ($optProgram ne "")
             {
                 $ob->write(chr(hex(substr($riga, $g, 2))));
             }
-            
+
             $Res = &strWaitACK();
             if ($Res eq $ACK)
             {
                 print ".";
+                $DonePages += 1;
             }
             elsif ($Res eq $NACK)
             {
@@ -348,7 +362,8 @@ if ($optProgram ne "")
             }
         }
     }
-    print " done\n";
+    $DonePages *= $RecLen;
+    print " done ($DonePages bytes)\n";
 }
 system;
 
