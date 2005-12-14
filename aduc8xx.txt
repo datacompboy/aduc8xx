@@ -32,4 +32,20 @@ aduc8xx.pl uses a fixed baud rate of 9600 baud and can not use any other baud ra
 
 If you use different, you should care of using available standard baud rates and you should modify the aduc8xx.pl source code in order to use it.
 
+----------------------------------------------------------
+Quickmode Option:
+The quickmode option changes the baud rate from default (9600) to the given value. It can be used only in the derivates that can use Timer 3 for baud rate generation.
+
+The value is composed by two comma-separated strings:
+- The first string is the hex value of the registers T3CON+T3FD used for the baud rate generation; the values must be calculated as shown in the microcontroller datasheet (see the "Commonly used baud rates" table, if there is one).
+- The second string is the desired baud rate for the PC serial port
+Examples (for ADuC842 running with 32KHz crystal):
+842D,19200
+832D,38400
+8309,57600
+8209,115200
+
+The ADuC842 bootloader use an internal value of 1 for the PLL configuration CPU core divider bits (CD2=0, CD1=0, CD0=1). I got this info with a few tries at different settings. I don't know if the bootloader uses this config in all the other derivates...
+
+
 

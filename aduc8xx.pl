@@ -11,6 +11,9 @@
 # Win32::SerialPort module)
 #
 # -----------------------------------------------------------------------------
+# Version 0.5 (051213)
+# Quickmode; goto Fine instead of exit;
+# -----------------------------------------------------------------------------
 # Version 0.4 (051213)
 # Always erase before programming
 # -----------------------------------------------------------------------------
@@ -54,7 +57,7 @@ BEGIN
 
 #______________________________________________________________________Variables
 my $Prog = "ADuC8xx Programmer";
-my $Ver = "Version 0.4 (051213)";
+my $Ver = "Version 0.5 (051213)";
 my $Copyright = "Copyright 2005 PRECMA Srl, FauMarz";
 my $Use = "Usage: aduc8xx [--opt1 [arg1[,arg2]] ... --optn [arg1[,arg2]]]";
 
@@ -68,6 +71,7 @@ my $optProgram;
 my $optData;
 my $optSecurity;
 my $optRun;
+my $optQuickmode;
 
 my $Res;
 my @strRomImage;
@@ -95,6 +99,7 @@ print "$Prog $Ver - $Copyright\n";
             "help"=>\$optHelp,
             "eflash"=>\$optEflash,
             "echip"=>\$optEchip,
+            "quickmode=s"=>\$optQuickmode,
             "program=s"=>\$optProgram,
             "data=s"=>\$optData,
             "security=s"=>\$optSecurity,
@@ -109,13 +114,20 @@ if ($optHelp)
 --help             Show options
 --eflash           Erase Flash Memory
 --echip            Erase Flash & Data Memory
+--quickmode s,b    Change the baud rate with the string 's' for the speed 'b
+        (available only for the Timer 3 enabled derivates - see aduc8xx.txt)
 --program hexfile  Program in the flash ROM the given hexfile
 --data hexfile     Program in the data ROM the given hexfile
 --security         TODO
 --run hexaddr      Execute user code from addr (hex)
 --port             Define serial port to use
+Examples:
+aduc8xx.pl --echip --program dummy.hex --run 0
+ Erase chip, program it \@9600baud and start the code
+aduc8xx.pl --echip --program dummy.hex --quickmode 8309,57600
+ Erase chip, program it \@57600baud (quickmode for ADuC842\@32KHz)
 ";
-exit;
+goto Fine;
 }
 
 
@@ -143,7 +155,7 @@ elsif (-e"$CfgFile")
 else
 {
     print "No serial port defined: use --port option\n";
-    exit;
+    goto Fine;
 }
 
 $ob->baudrate(9600)     || die "Fail setting serial port baud rate";
@@ -172,7 +184,7 @@ $Res = &strWaitResponse();
 if ($Res eq "")
 {
     print "Error\nNo device detected: please check connection and force the device in ISP mode\n";
-    exit;
+    goto Fine;
 }
 else
 {
@@ -214,14 +226,15 @@ if ($optEflash)
     elsif ($Res eq $NACK)
     {
         print "error - aborting\n";
-        exit;
+        goto Fine;
     }
     else
     {
         print "unknown response - aborting\n";
-        exit;
+        goto Fine;
     }
 }
+system;
 
 
 #_____________________________________________________________Erase Flash & Data
@@ -243,14 +256,59 @@ if ($optEchip)
     elsif ($Res eq $NACK)
     {
         print "error - aborting\n";
-        exit;
+        goto Fine;
     }
     else
     {
         print "unknown response - aborting\n";
-        exit;
+        goto Fine;
     }
 }
+system;
+
+
+if ($optQuickmode ne "")
+{
+my $riga;
+my $g;
+my @SplitArg;
+my $SFR_setting;
+my $BaudRate;
+
+    print "Setting Quickmode baud rate ... ";
+    system;
+
+    @SplitArg = split(",", $optQuickmode);
+    $SFR_setting = $SplitArg[0];
+    $BaudRate = $SplitArg[1];
+
+    # Set the baud rate to 57600
+    #       len  Cmd  T3CON+T3FD
+#    $riga = "03"."42"."83"."09";              # "42" is the hex ascii code for 'B'
+    $riga = "03"."42".$SFR_setting;              # "42" is the hex ascii code for 'B'
+    $riga = &strAddCheckSum($riga);
+    $ob->write(chr(0x07));
+    $ob->write(chr(0x0E));
+    for ($g = 0; $g < length($riga); $g += 2)
+    {
+        $ob->write(chr(hex(substr($riga, $g, 2))));
+    }
+
+    $Res = &strWaitACK();
+    if ($Res eq $ACK)
+    {
+        $ob->baudrate($BaudRate) || die "Fail setting serial port baud rate";
+        $ob->write_settings      || die "No serial port settings";
+        print "done\n";
+    }
+    elsif ($Res eq $NACK)
+    {
+        print "FAILED\n";
+        goto Fine;
+    }
+
+}
+system;
 
 
 #__________________________________________________________________Program Flash
@@ -302,7 +360,7 @@ if ($optProgram ne "")
                         print "The HEX file exceeds the device flash ROM dimension: programming interrupted.\n";
                         print "Maybe the program is too big or you are trying to write locations out of memory\n";
                         close SOURCE_FILE;
-                        exit;
+                        goto Fine;
                     }
                 }
             }
@@ -312,7 +370,7 @@ if ($optProgram ne "")
     else
     {
         print "The $optProgram file does not exist\n";
-        exit;
+        goto Fine;
     }
 
     # Program micro
@@ -353,12 +411,12 @@ if ($optProgram ne "")
             elsif ($Res eq $NACK)
             {
                 print " NACK\nProgramming Chip: failed\n";
-                exit;
+                goto Fine;
             }
             else
             {
                 print " X\nUnknown response - aborting\n";
-                exit;
+                goto Fine;
             }
         }
     }
@@ -415,7 +473,7 @@ if ($optData ne "")
                     {
                         print "The HEX file exceeds the device data ROM dimension: programming interrupted.\n";
                         close SOURCE_FILE;
-                        exit;
+                        goto Fine;
                     }
                 }
             }
@@ -425,7 +483,7 @@ if ($optData ne "")
     else
     {
         print "The $optData file does not exist\n";
-        exit;
+        goto Fine;
     }
 
     # Program data
@@ -445,7 +503,7 @@ if ($optData ne "")
                 $isTobeProg = 1;
             }
         }
-        
+
         # If it is a page to be programmed, send it
         if ($isTobeProg)
         {
@@ -456,7 +514,7 @@ if ($optData ne "")
             {
                 $ob->write(chr(hex(substr($riga, $g, 2))));
             }
-            
+
             $Res = &strWaitACK();
             if ($Res eq $ACK)
             {
@@ -465,12 +523,12 @@ if ($optData ne "")
             elsif ($Res eq $NACK)
             {
                 print " NACK\nProgramming Data: failed\n";
-                exit;
+                goto Fine;
             }
             else
             {
                 print " X\nUnknown response - aborting\n";
-                exit;
+                goto Fine;
             }
         }
     }
@@ -494,11 +552,11 @@ if ($optRun ne "")
 
     $optRun = strDecToHex24(hex($optRun));
     $riga = "04"."55".$optRun;                  # "55" is the hex ascii code for 'U', "04" is the data len
-    
+
     $riga = &strAddCheckSum($riga);
-    
+
     print "Remote RUN ... ";
-    
+
     $ob->write(chr(0x07));
     $ob->write(chr(0x0E));
     for ($g = 0; $g < length($riga); $g += 2)
@@ -514,16 +572,18 @@ if ($optRun ne "")
     elsif ($Res eq $NACK)
     {
         print "NACK: failed\n";
-        exit;
+        goto Fine;
     }
     else
     {
         print "Unknown response - aborting\n";
-        exit;
+        goto Fine;
     }
 }
+system;
 
 
+Fine:
 undef $ob;
 exit;
 #_______________________________________________________________Main Program END
