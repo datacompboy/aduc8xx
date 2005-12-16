@@ -11,6 +11,9 @@
 # Win32::SerialPort module)
 #
 # -----------------------------------------------------------------------------
+# Version 0.6 (051216)
+# Detect option
+# -----------------------------------------------------------------------------
 # Version 0.5 (051213)
 # Quickmode; goto Fine instead of exit;
 # -----------------------------------------------------------------------------
@@ -30,6 +33,7 @@
 # Copyright (C)2005 PRECMA S.r.l. - FauMarz - http://www.precma.com/
 # ******************************************************************************
 # TODO: Security modes
+# TODO: "Enable Custom Bootloader" Command
 
 
 
@@ -53,11 +57,11 @@ BEGIN
         die "$@\n" if ($@);
     }
 } # End BEGIN
- 
+
 
 #______________________________________________________________________Variables
 my $Prog = "ADuC8xx Programmer";
-my $Ver = "Version 0.5 (051213)";
+my $Ver = "Version 0.6 (051216)";
 my $Copyright = "Copyright 2005 PRECMA Srl, FauMarz";
 my $Use = "Usage: aduc8xx [--opt1 [arg1[,arg2]] ... --optn [arg1[,arg2]]]";
 
@@ -72,6 +76,7 @@ my $optData;
 my $optSecurity;
 my $optRun;
 my $optQuickmode;
+my $optDetect;
 
 my $Res;
 my @strRomImage;
@@ -97,6 +102,7 @@ print "$Prog $Ver - $Copyright\n";
 #             "float=f"=> \$mandatoryfloat,
 #             "optfloat:f"=> \$optionalfloat
             "help"=>\$optHelp,
+            "detect:i"=>\$optDetect,
             "eflash"=>\$optEflash,
             "echip"=>\$optEchip,
             "quickmode=s"=>\$optQuickmode,
@@ -112,19 +118,22 @@ if ($optHelp)
 {
     print "$Use
 --help             Show options
+--detect [baud]    Try to initiate the communication at the given baudrate
+(default 9600baud, setting depends on your system clock - see aduc8xx.txt)
 --eflash           Erase Flash Memory
 --echip            Erase Flash & Data Memory
---quickmode s,b    Change the baud rate with the string 's' for the speed 'b
+--quickmode s,b    Change the programming baud rate: s=T3CON:T3FD b=baudrate
         (available only for the Timer 3 enabled derivates - see aduc8xx.txt)
 --program hexfile  Program in the flash ROM the given hexfile
 --data hexfile     Program in the data ROM the given hexfile
 --security         TODO
 --run hexaddr      Execute user code from addr (hex)
---port             Define serial port to use
+--port p           Define serial port to use (p)
+Bootloader is initiated by the --detect option and stopped by the --run option
 Examples:
-aduc8xx.pl --echip --program dummy.hex --run 0
+aduc8xx.pl --detect --echip --program dummy.hex --run 0
  Erase chip, program it \@9600baud and start the code
-aduc8xx.pl --echip --program dummy.hex --quickmode 8309,57600
+aduc8xx.pl --detect --program dummy.hex --quickmode 8309,57600
  Erase chip, program it \@57600baud (quickmode for ADuC842\@32KHz)
 ";
 goto Fine;
@@ -141,6 +150,7 @@ if ($optPort ne "")
         $ob = Device::SerialPort->new ("$optPort");
     }
     die "Can't open serial port $optPort: $^E\n" unless ($ob);
+    $ob->save("$CfgFile");
 }
 elsif (-e"$CfgFile")
 {
@@ -158,49 +168,73 @@ else
     goto Fine;
 }
 
-$ob->baudrate(9600)     || die "Fail setting serial port baud rate";
-$ob->parity("none")     || die "Fail setting serial port parity";
-# $ob->parity_enable(1);   # for any parity except "none"
-$ob->databits(8)        || die "Fail setting serial port databits";
-$ob->stopbits(1)        || die "Fail setting serial port stopbits";
-$ob->handshake("none")  || die "Fail setting serial port handshake";
-$ob->write_settings     || die "No serial port settings";
-$ob->save("$CfgFile");
+# $ob->baudrate(9600)     || die "Fail setting serial port baud rate";
+# $ob->parity("none")     || die "Fail setting serial port parity";
+# $ob->databits(8)        || die "Fail setting serial port databits";
+# $ob->stopbits(1)        || die "Fail setting serial port stopbits";
+# $ob->handshake("none")  || die "Fail setting serial port handshake";
+# $ob->write_settings     || die "No serial port settings";
+# $ob->save("$CfgFile");
 
 
 # When you start the device ISP mode, it sends 25 bytes: this read clears the buffer
 $ob->read_const_time(50);
-#$ob->read_char_time(1);
 $Res = $ob->read(255);
 
 
+
 #___________________________________________________________Check for the device
-print "Detecting device ... ";
-system;
-$ob->write("!Z");
-$ob->write(chr(0x00));
-$ob->write(chr(0xA6));
-$Res = &strWaitResponse();
-if ($Res eq "")
+if (($optDetect ne "") && ($optDetect == 0))
 {
-    print "Error\nNo device detected: please check connection and force the device in ISP mode\n";
-    goto Fine;
+    $optDetect = 9600;
+}
+
+if ($optDetect ne "")
+{
+$ob->baudrate($optDetect)   || die "Fail setting serial port baud rate";
+$ob->parity("none")         || die "Fail setting serial port parity";
+$ob->databits(8)            || die "Fail setting serial port databits";
+$ob->stopbits(1)            || die "Fail setting serial port stopbits";
+$ob->handshake("none")      || die "Fail setting serial port handshake";
+$ob->write_settings         || die "No serial port settings";
+#$ob->save("$CfgFile");
+
+    print "Detecting device ... ";
+    system;
+    $ob->write("!Z");
+    $ob->write(chr(0x00));
+    $ob->write(chr(0xA6));
+    $Res = &strWaitResponse();
+    if ($Res eq "")
+    {
+        print "Error\nNo device detected: please check connection and force the device in ISP mode\n";
+        goto Fine;
+    }
+    else
+    {
+        print "done. Connected device: $Res\n";
+        system;
+        # Gets the other 10 bytes of the start string (clears the buffer)
+        $ob->read_const_time(50);
+        $Res = $ob->read(255);
+    }
 }
 else
 {
-    print "done. Connected device: $Res\n";
-    system;
-    # Gets the other 10 bytes of the start string (clears the buffer)
-    $ob->read_const_time(50);
-#    $ob->read_char_time(1);
-    $Res = $ob->read(255);
+    $ob->baudrate(9600)     || die "Fail setting serial port baud rate";
+    $ob->parity("none")     || die "Fail setting serial port parity";
+    $ob->databits(8)        || die "Fail setting serial port databits";
+    $ob->stopbits(1)        || die "Fail setting serial port stopbits";
+    $ob->handshake("none")  || die "Fail setting serial port handshake";
+    $ob->write_settings     || die "No serial port settings";
+#    $ob->save("$CfgFile");
 }
 system;
 
 
 # Options that include others
 if  (
-($optProgram ne "") && ($optEflash eq "") && ($optEchip eq "")
+($optProgram ne "") && ($optEflash eq "") && ($optEchip eq "") && ($optDetect ne "")
     )
 {
     $optEflash = 1;
