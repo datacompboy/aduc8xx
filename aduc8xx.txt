@@ -6,16 +6,20 @@
 # Analog Devices ADuC8xx family microcontrollers downloader
 #
 # Fausto Marzoli - faumarz@8052.it
-# Copyright (C)2005 PRECMA S.r.l. - FauMarz - http://www.precma.com/
+# Copyright (C)2005-2006 PRECMA S.r.l. - FauMarz - http://www.precma.com/
 # ******************************************************************************
 
-This program is distributed under the GNU GPL license.
+This program is distributed under the GNU GPL license, for Windows and Linux.
 
 Using perl module Device::SerialPort (http://sendpage.org/device-serialport/)
+or Win32::SerialPort (http://members.aol.com/Bbirthisel/alpha.html)
+
+To install the module, download it the run "perl Makefile.PL" and "perl install.pl".
+Under Windows I used Active Perl with the optional module Win32/API (you can install it with the Active Perl Package Manager). Under Windows you can use the executable aduc8xx.exe, without the need to have perl installed.
 
 Made to work with ADuC842, but should work with any other uC of the family, too (except the first versions with loader 1.0 installed onboard).
-Developed under Linux (SuSE 9.2); should work with Windows, too (using Win32::SerialPort module), BUT IT IS NOT TESTED YET.
-If you are using aduc8xx.pl under windows, please tell me (faumarz@8052.it).
+Developed under Linux (SuSE 9.2 and 10.0); works with Windows, too.
+It has been reported to be working with FreeBSD.
 
 Accept and intelligently use multiple options. For example, you can blank and program the LPC device with one single command line:
 # aduc8xx.pl --echip --program dummy.hex
@@ -23,8 +27,7 @@ Accept and intelligently use multiple options. For example, you can blank and pr
 When using aduc8xx.pl the first time, you will be asked for using the --port option. After the first successful using of the --port option, aduc8xx.pl writes its configuration in a hidden file named .aduc8xx.cgf in your home dir.
 Under Linux, usually the port to be used is /dev/tty0 or /dev/ttyUSB0 or something like this (be sure to have the rights to access the port!). Under windows should be some COM (COM2, or COM3 or something similar).
 
-If your PERL installation has not the Device::SerialPort module install, you will have to download and install it from
-http://sendpage.org/device-serialport/
+
 ----------------------------------------------------------
 IMPORTANT NOTE:
 Some ADuC derivates change the bootloader baud rate if you change the system clock from the default values.

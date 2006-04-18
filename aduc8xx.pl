@@ -11,6 +11,9 @@
 # Win32::SerialPort module)
 #
 # -----------------------------------------------------------------------------
+# Version 0.7 (060418)
+# "Enable Custom Bootloader" Command
+# -----------------------------------------------------------------------------
 # Version 0.6 (051216)
 # Detect option
 # -----------------------------------------------------------------------------
@@ -30,10 +33,9 @@
 # First release
 # -----------------------------------------------------------------------------
 # Fausto Marzoli - faumarz@8052.it
-# Copyright (C)2005 PRECMA S.r.l. - FauMarz - http://www.precma.com/
+# Copyright (C)2005-2006 PRECMA S.r.l. - FauMarz - http://www.precma.com/
 # ******************************************************************************
 # TODO: Security modes
-# TODO: "Enable Custom Bootloader" Command
 
 
 
@@ -61,8 +63,8 @@ BEGIN
 
 #______________________________________________________________________Variables
 my $Prog = "ADuC8xx Programmer";
-my $Ver = "Version 0.6 (051216)";
-my $Copyright = "Copyright 2005 PRECMA Srl, FauMarz";
+my $Ver = "Version 0.7 (060418)";
+my $Copyright = "Copyright 2005-2006 PRECMA Srl";
 my $Use = "Usage: aduc8xx [--opt1 [arg1[,arg2]] ... --optn [arg1[,arg2]]]";
 
 my $CfgFile = "$ENV{HOME}/.aduc8xx.cfg";
@@ -77,6 +79,7 @@ my $optSecurity;
 my $optRun;
 my $optQuickmode;
 my $optDetect;
+my $optBootload;
 
 my $Res;
 my @strRomImage;
@@ -109,6 +112,7 @@ print "$Prog $Ver - $Copyright\n";
             "program=s"=>\$optProgram,
             "data=s"=>\$optData,
             "security=s"=>\$optSecurity,
+            "bootload=s"=>\$optBootload,
             "run=s"=>\$optRun,
             "port=s"=>\$optPort
             );
@@ -119,22 +123,23 @@ if ($optHelp)
     print "$Use
 --help             Show options
 --detect [baud]    Try to initiate the communication at the given baudrate
-(default 9600baud, setting depends on your system clock - see aduc8xx.txt)
+  (default 9600baud, setting depends on your system clock - see aduc8xx.txt)
 --eflash           Erase Flash Memory
 --echip            Erase Flash & Data Memory
 --quickmode s,b    Change the programming baud rate: s=T3CON:T3FD b=baudrate
-        (available only for the Timer 3 enabled derivates - see aduc8xx.txt)
+  (available for the Timer 3 enabled derivates only - see aduc8xx.txt)
 --program hexfile  Program in the flash ROM the given hexfile
 --data hexfile     Program in the data ROM the given hexfile
 --security         TODO
+--bootload [E/D]   Enable (E) or disable (D) the custom bootloader startaddress
 --run hexaddr      Execute user code from addr (hex)
---port p           Define serial port to use (p)
+--port p           Define serial port to use (i.e. /dev/ttyS0)
 Bootloader is initiated by the --detect option and stopped by the --run option
 Examples:
 aduc8xx.pl --detect --echip --program dummy.hex --run 0
- Erase chip, program it \@9600baud and start the code
+  Erase chip, program it \@9600baud and start the code
 aduc8xx.pl --detect --program dummy.hex --quickmode 8309,57600
- Erase chip, program it \@57600baud (quickmode for ADuC842\@32KHz)
+  Erase chip, program it \@57600baud (quickmode for ADuC842\@32KHz)
 ";
 goto Fine;
 }
@@ -571,7 +576,64 @@ if ($optData ne "")
 system;
 
 
-#___________________________________________________________________Program Data
+#________________________________________________Custom Bootlader ENABLE/DISABLE
+if ($optBootload ne "")
+{
+    my $riga;
+    my $g;
+
+    if (($optBootload eq "E") || ($optBootload eq "e"))
+    {
+        print "Enabling Custom Bootloader Start Address ... ";
+        $riga = "02"."46"."FE";              # "46" is the hex ascii code for 'F'
+        $riga = &strAddCheckSum($riga);
+        $ob->write(chr(0x07));
+        $ob->write(chr(0x0E));
+        for ($g = 0; $g < length($riga); $g += 2)
+        {
+            $ob->write(chr(hex(substr($riga, $g, 2))));
+        }
+        $Res = &strWaitACK();
+        if ($Res eq $ACK)
+        {
+            print "done\n";
+        }
+        elsif ($Res eq $NACK)
+        {
+            print "FAILED\n";
+            goto Fine;
+        }
+    }
+    elsif (($optBootload eq "D") || ($optBootload eq "d"))
+    {
+        print "Disabling Custom Bootloader Start Address ... ";
+        $riga = "02"."46"."FF";              # "46" is the hex ascii code for 'F'
+        $riga = &strAddCheckSum($riga);
+        $ob->write(chr(0x07));
+        $ob->write(chr(0x0E));
+        for ($g = 0; $g < length($riga); $g += 2)
+        {
+            $ob->write(chr(hex(substr($riga, $g, 2))));
+        }
+        $Res = &strWaitACK();
+        if ($Res eq $ACK)
+        {
+            print "done\n";
+        }
+        elsif ($Res eq $NACK)
+        {
+            print "FAILED\n";
+            goto Fine;
+        }
+    }
+    else
+    {
+        print "Bad option: --bootloader accepts only arguments E(nable) or D(isable)\n";
+    }
+}
+
+
+#_______________________________________________________________Program Security
 if ($optSecurity ne "")
 {
     print "Security programming not available yet - under development\n";
