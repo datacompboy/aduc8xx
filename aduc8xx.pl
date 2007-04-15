@@ -7,9 +7,12 @@
 # In System Analog Devices AD842 (and others) microcontrollers programmer
 # Using perl module Device::SerialPort (http://sendpage.org/device-serialport/)
 #
-# Developed under Linux (SuSE 9.2 - 10.0); should work with Windows, too (using
+# Developed under Linux (SuSE 9.2 - 10.2); works with Windows, too (using
 # Win32::SerialPort module)
 #
+# -----------------------------------------------------------------------------
+# Version 0.8 (070415)
+# Enhanced programming speed: 32K in ~25sec instead of ~42sec
 # -----------------------------------------------------------------------------
 # Version 0.7 (060418)
 # "Enable Custom Bootloader" Command
@@ -445,6 +448,7 @@ if ($optProgram ne "")
             if ($Res eq $ACK)
             {
                 print ".";
+                system;
                 $DonePages += 1;
             }
             elsif ($Res eq $NACK)
@@ -745,12 +749,14 @@ sub strWaitACK
 # Wait for ACK/NACK with timeout
 # ------------------------------------------------------------------------------
 {
-my $timeout = 100;
+#my $timeout = 100;
+my $timeout = 50;
 my $chars = 0;
 my $buffer = "";
 
     $ob->read_interval(100) if ($OS_win);
-    $ob->read_const_time(10);
+#    $ob->read_const_time(10);
+    $ob->read_const_time(1);
     $ob->read_char_time(0);
 
     while ($timeout > 0)
@@ -764,12 +770,12 @@ my $buffer = "";
             # say "last" if we find it
             if ($buffer eq chr($ACK))
             {
-                system;
+#                system;
                 return $ACK;
             }
             elsif ($buffer eq chr($NACK))
             {
-                system;
+#                system;
                 return $NACK;
             }
         }
