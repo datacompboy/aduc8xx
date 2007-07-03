@@ -11,6 +11,9 @@
 # Win32::SerialPort module)
 #
 # -----------------------------------------------------------------------------
+# Version 0.9 (070703)
+# Reduced dots output to speed up in windows mode
+# -----------------------------------------------------------------------------
 # Version 0.8 (070415)
 # Enhanced programming speed: 32K in ~25sec instead of ~42sec
 # -----------------------------------------------------------------------------
@@ -66,8 +69,8 @@ BEGIN
 
 #______________________________________________________________________Variables
 my $Prog = "ADuC8xx Programmer";
-my $Ver = "Version 0.7 (060418)";
-my $Copyright = "Copyright 2005-2006 PRECMA Srl";
+my $Ver = "Version 0.9 (070703)";
+my $Copyright = "Copyright 2005-2007 PRECMA Srl";
 my $Use = "Usage: aduc8xx [--opt1 [arg1[,arg2]] ... --optn [arg1[,arg2]]]";
 
 my $CfgFile = "$ENV{HOME}/.aduc8xx.cfg";
@@ -158,7 +161,7 @@ if ($optPort ne "")
         $ob = Device::SerialPort->new ("$optPort");
     }
     die "Can't open serial port $optPort: $^E\n" unless ($ob);
-    $ob->save("$CfgFile");
+#    $ob->save("$CfgFile");
 }
 elsif (-e"$CfgFile")
 {
@@ -366,6 +369,7 @@ if ($optProgram ne "")
 
     my $TOP_ADDR = 0xF800;          # 62Kb
 
+
     # Fill the ROM with "00"
     for ($i = 0 ; $i < $TOP_ADDR+1; $i++)
     {
@@ -417,6 +421,7 @@ if ($optProgram ne "")
 
     # Program micro
     print "Programming device flash ROM ...";
+    system;
     for ($i = 0; $i < $TOP_ADDR; $i += $RecLen)
     {
         $offset = strDecToHex24($i);
@@ -443,12 +448,10 @@ if ($optProgram ne "")
             {
                 $ob->write(chr(hex(substr($riga, $g, 2))));
             }
-
+            
             $Res = &strWaitACK();
             if ($Res eq $ACK)
             {
-                print ".";
-                system;
                 $DonePages += 1;
             }
             elsif ($Res eq $NACK)
@@ -460,6 +463,13 @@ if ($optProgram ne "")
             {
                 print " X\nUnknown response - aborting\n";
                 goto Fine;
+            }
+
+            # Dots
+            if (($DonePages % 16) == 0)
+            {
+                print ".";
+                system;
             }
         }
     }
@@ -749,13 +759,12 @@ sub strWaitACK
 # Wait for ACK/NACK with timeout
 # ------------------------------------------------------------------------------
 {
-#my $timeout = 100;
 my $timeout = 50;
 my $chars = 0;
 my $buffer = "";
 
     $ob->read_interval(100) if ($OS_win);
-#    $ob->read_const_time(10);
+#     $ob->read_const_time(100);
     $ob->read_const_time(1);
     $ob->read_char_time(0);
 
@@ -784,6 +793,7 @@ my $buffer = "";
             $timeout--;
         }
     }
+    print "timeout\n";
 #     for ($count = 0; $count < 500; $count++)
 #     {
 #         $count, $result = $ob->read(1);
