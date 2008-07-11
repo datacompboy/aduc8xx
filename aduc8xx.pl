@@ -7,9 +7,13 @@
 # In System Analog Devices AD842 (and others) microcontrollers programmer
 # Using perl module Device::SerialPort (http://sendpage.org/device-serialport/)
 #
-# Developed under Linux (SuSE 9.2 - 10.2); works with Windows, too (using
+# Developed under Linux (SuSE 9.2 - 10.2 - 10.3); works with Windows, too (using
 # Win32::SerialPort module)
 #
+# -----------------------------------------------------------------------------
+# Version 1.0 (080711)
+# Thanks to Peter Gaus for bugfix in data ROM programming and +/- 1 problem 
+# with variable $TOP_ADDR
 # -----------------------------------------------------------------------------
 # Version 0.9 (070703)
 # Reduced dots output to speed up in windows mode
@@ -39,7 +43,7 @@
 # First release
 # -----------------------------------------------------------------------------
 # Fausto Marzoli - faumarz@8052.it
-# Copyright (C)2005-2006 PRECMA S.r.l. - FauMarz - http://www.precma.com/
+# Copyright (C)2005-2008 PRECMA S.r.l. - http://www.precma.com/
 # ******************************************************************************
 # TODO: Security modes
 
@@ -69,8 +73,8 @@ BEGIN
 
 #______________________________________________________________________Variables
 my $Prog = "ADuC8xx Programmer";
-my $Ver = "Version 0.9 (070703)";
-my $Copyright = "Copyright 2005-2007 PRECMA Srl";
+my $Ver = "Version 1.0 (080711)";
+my $Copyright = "Copyright 2005-2008 PRECMA Srl";
 my $Use = "Usage: aduc8xx [--opt1 [arg1[,arg2]] ... --optn [arg1[,arg2]]]";
 
 my $CfgFile = "$ENV{HOME}/.aduc8xx.cfg";
@@ -89,7 +93,8 @@ my $optBootload;
 
 my $Res;
 my @strRomImage;
-my $RecLen =0x10;               # 16 bytes programming record
+my $RecLen = 0x10;              # 16 bytes programming record
+my $DataPageLen = 0x04;         #  4 bytes data record
 
 my $ACK = 0x06;
 my $NACK = 0x07;
@@ -329,7 +334,6 @@ my $BaudRate;
 
     # Set the baud rate to 57600
     #       len  Cmd  T3CON+T3FD
-#    $riga = "03"."42"."83"."09";              # "42" is the hex ascii code for 'B'
     $riga = "03"."42".$SFR_setting;              # "42" is the hex ascii code for 'B'
     $riga = &strAddCheckSum($riga);
     $ob->write(chr(0x07));
@@ -371,7 +375,7 @@ if ($optProgram ne "")
 
 
     # Fill the ROM with "00"
-    for ($i = 0 ; $i < $TOP_ADDR+1; $i++)
+    for ($i = 0 ; $i < $TOP_ADDR; $i++)
     {
         $strRomImage[$i] = "00";
     }
@@ -383,13 +387,13 @@ if ($optProgram ne "")
         while ($riga = <SOURCE_FILE>)
         {
             $riga = Trim($riga);
-
+            
             # If EOF record end
             if ($riga eq ":00000001FF")
             {
                 last;
             }
-
+            
             $len = hex(substr($riga, 1, 2));
             $offset = hex(substr($riga, 3, 4));
             # If it is a data record, read it
@@ -397,7 +401,7 @@ if ($optProgram ne "")
             {
                 for ($i = 0; $i < $len; $i++)
                 {
-                    if (($offset + $i) <= $TOP_ADDR)
+                    if (($offset + $i) < $TOP_ADDR)
                     {
                         $strRomImage[$offset + $i] = substr($riga, (9 + ($i * 2)), 2);
                     }
@@ -427,7 +431,7 @@ if ($optProgram ne "")
         $offset = strDecToHex24($i);
         $len = strDecToHex8($RecLen+4);         # includes command and 24bit address
         $riga = $len."57".$offset;              # "57" is the hex ascii code for 'W'
-
+        
         $isTobeProg = 0;
         for ($g = 0; $g < $RecLen; $g++)
         {
@@ -437,7 +441,7 @@ if ($optProgram ne "")
                 $isTobeProg = 1;
             }
         }
-
+        
         # If it is a page to be programmed, send it
         if ($isTobeProg)
         {
@@ -464,7 +468,7 @@ if ($optProgram ne "")
                 print " X\nUnknown response - aborting\n";
                 goto Fine;
             }
-
+            
             # Dots
             if (($DonePages % 16) == 0)
             {
@@ -492,7 +496,7 @@ if ($optData ne "")
     my $TOP_ADDR = 0x1000;          # 4Kb
 
     # Fill the ROM with "00"
-    for ($i = 0 ; $i < $TOP_ADDR+1; $i++)
+    for ($i = 0 ; $i < $TOP_ADDR; $i++)
     {
         $strRomImage[$i] = "00";
     }
@@ -504,13 +508,13 @@ if ($optData ne "")
         while ($riga = <SOURCE_FILE>)
         {
             $riga = Trim($riga);
-
+            
             # If EOF record end
             if ($riga eq ":00000001FF")
             {
                 last;
             }
-
+            
             $len = hex(substr($riga, 1, 2));
             $offset = hex(substr($riga, 3, 4));
             # If it is a data record, read it
@@ -518,7 +522,7 @@ if ($optData ne "")
             {
                 for ($i = 0; $i < $len; $i++)
                 {
-                    if (($offset + $i) <= $TOP_ADDR)
+                    if (($offset + $i) < $TOP_ADDR)
                     {
                         $strRomImage[$offset + $i] = substr($riga, (9 + ($i * 2)), 2);
                     }
@@ -541,14 +545,14 @@ if ($optData ne "")
 
     # Program data
     print "Programming device data ROM ...";
-    for ($i = 0; $i < $TOP_ADDR; $i += $RecLen)
+    for ($i = 0; $i < $TOP_ADDR; $i += $DataPageLen)
     {
-        $offset = strDecToHex24($i);
-        $len = strDecToHex8($RecLen+4);         # includes command and 24bit address
+        $offset = strDecToHex24($i/4);          # page offset !!!
+        $len = strDecToHex8($DataPageLen+4);    # includes command and 24bit address
         $riga = $len."45".$offset;              # "45" is the hex ascii code for 'E'
-
+        
         $isTobeProg = 0;
-        for ($g = 0; $g < $RecLen; $g++)
+        for ($g = 0; $g < $DataPageLen; $g++)
         {
             $riga = $riga.$strRomImage[$i + $g];
             if ($strRomImage[$i + $g] ne "00")
@@ -556,7 +560,7 @@ if ($optData ne "")
                 $isTobeProg = 1;
             }
         }
-
+        
         # If it is a page to be programmed, send it
         if ($isTobeProg)
         {
@@ -567,7 +571,7 @@ if ($optData ne "")
             {
                 $ob->write(chr(hex(substr($riga, $g, 2))));
             }
-
+            
             $Res = &strWaitACK();
             if ($Res eq $ACK)
             {
@@ -736,21 +740,6 @@ my @SplitBuf;
             $timeout--;
         }
     }
-
-#     my ($count, $result, $message);
-# 
-#     $ob->read_interval(100) if ($OS_win);
-#     $ob->read_const_time(10);
-#     for ($count = 0; $count < 500; $count++)
-#     {
-#         $count, $result = $ob->read(1);
-#         $message = "$message$result";
-#         if ($result eq "\n")
-#         {
-#             system;
-#             return &Trim($message);
-#         }
-#     }
 }
 
 
@@ -759,13 +748,12 @@ sub strWaitACK
 # Wait for ACK/NACK with timeout
 # ------------------------------------------------------------------------------
 {
-my $timeout = 50;
+my $timeout = 100;
 my $chars = 0;
 my $buffer = "";
 
     $ob->read_interval(100) if ($OS_win);
-#     $ob->read_const_time(100);
-    $ob->read_const_time(1);
+    $ob->read_const_time(10);
     $ob->read_char_time(0);
 
     while ($timeout > 0)
@@ -794,20 +782,6 @@ my $buffer = "";
         }
     }
     print "timeout\n";
-#     for ($count = 0; $count < 500; $count++)
-#     {
-#         $count, $result = $ob->read(1);
-#         if ($result eq chr($ACK))
-#         {
-#             system;
-#             return $ACK;
-#         }
-#         elsif ($result eq chr($NACK))
-#         {
-#             system;
-#             return $NACK;
-#         }
-#     }
 }
 
 

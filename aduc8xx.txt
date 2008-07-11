@@ -6,7 +6,7 @@
 # Analog Devices ADuC8xx family microcontrollers downloader
 #
 # Fausto Marzoli - faumarz@8052.it
-# Copyright (C)2005-2006 PRECMA S.r.l. - FauMarz - http://www.precma.com/
+# Copyright (C)2005-2008 PRECMA S.r.l. - FauMarz - http://www.precma.com/
 # ******************************************************************************
 
 This program is distributed under the GNU GPL license, for Windows and Linux.
@@ -15,11 +15,13 @@ Using perl module Device::SerialPort (http://sendpage.org/device-serialport/)
 or Win32::SerialPort (http://members.aol.com/Bbirthisel/alpha.html)
 
 To install the module, download it the run "perl Makefile.PL" and "perl install.pl".
+Under Linux: "perl Makefile.PL" and "make && make install".
 Under Windows I used Active Perl with the optional module Win32/API (you can install it with the Active Perl Package Manager). Under Windows you can use the executable aduc8xx.exe, without the need to have perl installed.
 
 Made to work with ADuC842, but should work with any other uC of the family, too (except the first versions with loader 1.0 installed onboard).
-Developed under Linux (SuSE 9.2 and 10.0); works with Windows, too.
+Developed under Linux (SuSE 9.2, 10.0, 10.2, 10.3); works with Windows, too.
 It has been reported to be working with FreeBSD.
+Peter Gaus reports that it works with ADuC832 and ADuC834.
 
 Accept and intelligently use multiple options. For example, you can blank and program the LPC device with one single command line:
 # aduc8xx.pl --echip --program dummy.hex
