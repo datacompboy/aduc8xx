@@ -11,6 +11,9 @@
 # Win32::SerialPort module)
 #
 # -----------------------------------------------------------------------------
+# Version 1.1 (090707)
+# Support for some USB/RS232 converters (FTDI)
+# -----------------------------------------------------------------------------
 # Version 1.0 (080711)
 # Thanks to Peter Gaus for bugfix in data ROM programming and +/- 1 problem 
 # with variable $TOP_ADDR
@@ -73,8 +76,8 @@ BEGIN
 
 #______________________________________________________________________Variables
 my $Prog = "ADuC8xx Programmer";
-my $Ver = "Version 1.0 (080711)";
-my $Copyright = "Copyright 2005-2008 PRECMA Srl";
+my $Ver = "Version 1.1 (090707)";
+my $Copyright = "Copyright 2005-2009 PRECMA Srl";
 my $Use = "Usage: aduc8xx [--opt1 [arg1[,arg2]] ... --optn [arg1[,arg2]]]";
 
 my $CfgFile = "$ENV{HOME}/.aduc8xx.cfg";
@@ -445,13 +448,17 @@ if ($optProgram ne "")
         # If it is a page to be programmed, send it
         if ($isTobeProg)
         {
+            # The "system" calls are needed for some USB/RS232 converters (i.e. FTDI)
             $riga = &strAddCheckSum($riga);
             $ob->write(chr(0x07));
+            system;
             $ob->write(chr(0x0E));
             for ($g = 0; $g < length($riga); $g += 2)
             {
+                system;
                 $ob->write(chr(hex(substr($riga, $g, 2))));
             }
+            system;
             
             $Res = &strWaitACK();
             if ($Res eq $ACK)
@@ -767,12 +774,10 @@ my $buffer = "";
             # say "last" if we find it
             if ($buffer eq chr($ACK))
             {
-#                system;
                 return $ACK;
             }
             elsif ($buffer eq chr($NACK))
             {
-#                system;
                 return $NACK;
             }
         }
