@@ -11,6 +11,9 @@
 # Win32::SerialPort module)
 #
 # -----------------------------------------------------------------------------
+# Version 1.2 (140114)
+# Better support for some USB/RS232 converters
+# -----------------------------------------------------------------------------
 # Version 1.1 (090707)
 # Support for some USB/RS232 converters (FTDI)
 # -----------------------------------------------------------------------------
@@ -76,8 +79,8 @@ BEGIN
 
 #______________________________________________________________________Variables
 my $Prog = "ADuC8xx Programmer";
-my $Ver = "Version 1.1 (090707)";
-my $Copyright = "Copyright 2005-2009 PRECMA Srl";
+my $Ver = "Version 1.2 (140114)";
+my $Copyright = "Copyright 2005-2014 PRECMA Srl";
 my $Use = "Usage: aduc8xx [--opt1 [arg1[,arg2]] ... --optn [arg1[,arg2]]]";
 
 my $CfgFile = "$ENV{HOME}/.aduc8xx.cfg";
@@ -220,9 +223,11 @@ $ob->write_settings         || die "No serial port settings";
 
     print "Detecting device ... ";
     system;
-    $ob->write("!Z");
-    $ob->write(chr(0x00));
-    $ob->write(chr(0xA6));
+#     $ob->write("!Z");
+#     $ob->write(chr(0x00));
+#     $ob->write(chr(0xA6));
+    $ob->write("!Z".chr(0x00).chr(0xA6));
+
     $Res = &strWaitResponse();
     if ($Res eq "")
     {
@@ -265,11 +270,12 @@ if ($optEflash)
 {
     print "Erasing Flash ROM ... ";
     system;
-    $ob->write(chr(0x07));
-    $ob->write(chr(0x0E));
-    $ob->write(chr(0x01));
-    $ob->write("C");
-    $ob->write(chr(0xBC));
+#     $ob->write(chr(0x07));
+#     $ob->write(chr(0x0E));
+#     $ob->write(chr(0x01));
+#     $ob->write("C");
+#     $ob->write(chr(0xBC));
+    $ob->write(chr(0x07).chr(0x0E).chr(0x01)."C".chr(0xBC));
     $Res = &strWaitACK();
 
     if ($Res eq $ACK)
@@ -295,11 +301,12 @@ if ($optEchip)
 {
     print "Erasing Flash & Data ROM ... ";
     system;
-    $ob->write(chr(0x07));
-    $ob->write(chr(0x0E));
-    $ob->write(chr(0x01));
-    $ob->write("A");
-    $ob->write(chr(0xBE));
+#~     $ob->write(chr(0x07));
+#~     $ob->write(chr(0x0E));
+#~     $ob->write(chr(0x01));
+#~     $ob->write("A");
+#~     $ob->write(chr(0xBE));
+    $ob->write(chr(0x07).chr(0x0E).chr(0x01)."A".chr(0xBE));
     $Res = &strWaitACK();
 
     if ($Res eq $ACK)
