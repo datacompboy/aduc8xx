@@ -11,6 +11,11 @@
 # Win32::SerialPort module)
 #
 # -----------------------------------------------------------------------------
+# Version 1.3 (140401)
+# Added security options
+# Quick download protocol
+# Detect using several baudrates (allow to re-connect after quick mode without reset)
+# -----------------------------------------------------------------------------
 # Version 1.2 (140114)
 # Better support for some USB/RS232 converters
 # -----------------------------------------------------------------------------
@@ -51,8 +56,6 @@
 # Fausto Marzoli - faumarz@8052.it
 # Copyright (C)2005-2008 PRECMA S.r.l. - http://www.precma.com/
 # ******************************************************************************
-# TODO: Security modes
-
 
 
 use strict;
@@ -79,7 +82,7 @@ BEGIN
 
 #______________________________________________________________________Variables
 my $Prog = "ADuC8xx Programmer";
-my $Ver = "Version 1.2 (140114)";
+my $Ver = "Version 1.3 (140401)";
 my $Copyright = "Copyright 2005-2014 PRECMA Srl";
 my $Use = "Usage: aduc8xx [--opt1 [arg1[,arg2]] ... --optn [arg1[,arg2]]]";
 
@@ -100,6 +103,7 @@ my $optBootload;
 my $Res;
 my @strRomImage;
 my $RecLen = 0x10;              # 16 bytes programming record
+my $QuickRecLen = 0x100;        # 256 bytes block in quick mode
 my $DataPageLen = 0x04;         #  4 bytes data record
 
 my $ACK = 0x06;
@@ -122,13 +126,13 @@ print "$Prog $Ver - $Copyright\n";
 #             "float=f"=> \$mandatoryfloat,
 #             "optfloat:f"=> \$optionalfloat
             "help"=>\$optHelp,
-            "detect:i"=>\$optDetect,
+            "detect:s"=>\$optDetect,
             "eflash"=>\$optEflash,
             "echip"=>\$optEchip,
             "quickmode=s"=>\$optQuickmode,
             "program=s"=>\$optProgram,
             "data=s"=>\$optData,
-            "security=s"=>\$optSecurity,
+            "security:4"=>\$optSecurity,
             "bootload=s"=>\$optBootload,
             "run=s"=>\$optRun,
             "port=s"=>\$optPort
@@ -147,7 +151,9 @@ if ($optHelp)
   (available for the Timer 3 enabled derivates only - see aduc8xx.txt)
 --program hexfile  Program in the flash ROM the given hexfile
 --data hexfile     Program in the data ROM the given hexfile
---security         TODO
+--security [mode]  Set Security mode (6=LOCK, 5=SECURE, 4=LOCK+SECURE (default),
+                   3=SERIAL SAFE, 2=SERIAL SAFE+LOCK, 1=SERIAL SAFE+SECURE,
+                   0=SERIAL SAFE+SECURE+LOCK)
 --bootload [E/D]   Enable (E) or disable (D) the custom bootloader startaddress
 --run hexaddr      Execute user code from addr (hex)
 --port p           Define serial port to use (i.e. /dev/ttyS0)
@@ -206,29 +212,30 @@ $Res = $ob->read(255);
 
 
 #___________________________________________________________Check for the device
-if (($optDetect ne "") && ($optDetect == 0))
-{
-    $optDetect = 9600;
-}
-
 if ($optDetect ne "")
 {
-$ob->baudrate($optDetect)   || die "Fail setting serial port baud rate";
-$ob->parity("none")         || die "Fail setting serial port parity";
-$ob->databits(8)            || die "Fail setting serial port databits";
-$ob->stopbits(1)            || die "Fail setting serial port stopbits";
-$ob->handshake("none")      || die "Fail setting serial port handshake";
-$ob->write_settings         || die "No serial port settings";
-#$ob->save("$CfgFile");
+my @SplitArg;
+my $i;
+
+    $ob->parity("none")         || die "Fail setting serial port parity";
+    $ob->databits(8)            || die "Fail setting serial port databits";
+    $ob->stopbits(1)            || die "Fail setting serial port stopbits";
+    $ob->handshake("none")      || die "Fail setting serial port handshake";
 
     print "Detecting device ... ";
     system;
-#     $ob->write("!Z");
-#     $ob->write(chr(0x00));
-#     $ob->write(chr(0xA6));
-    $ob->write("!Z".chr(0x00).chr(0xA6));
 
-    $Res = &strWaitResponse();
+    @SplitArg = split(",", $optDetect);
+    for($i=0;$i<scalar @SplitArg; $i++) {
+        print "\b\b\b\b[$SplitArg[$i]] ... ";
+        system;
+        $ob->baudrate($SplitArg[$i]) || die "Fail setting serial port baud rate";
+        $ob->write_settings          || die "No serial port settings";
+
+        $ob->write("!Z".chr(0x00).chr(0xA6));
+        $Res = &strWaitResponse(1);
+        last if ($Res ne "");
+    }
     if ($Res eq "")
     {
         print "Error\nNo device detected: please check connection and force the device in ISP mode\n";
@@ -370,6 +377,39 @@ my $BaudRate;
 system;
 
 
+#_______________________________________________________________Program Security
+if ($optSecurity ne "")
+{
+my $riga;
+my $g;
+my $sendstr;
+    
+    print "Setting Security mode=$optSecurity ... ";
+    system;
+
+    #        len  Cmd  Mode
+    $riga = "02"."53".sprintf("%02X", $optSecurity);  # "53" is the hex ascii code for 'S'
+    $riga = &strAddCheckSum($riga);
+    $sendstr = chr(0x07).chr(0x0E);
+    for ($g = 0; $g < length($riga); $g += 2)
+    {
+        $sendstr .= chr(hex(substr($riga, $g, 2)));
+    }
+    $ob->write($sendstr);
+
+    $Res = &strWaitACK();
+    if ($Res eq $ACK)
+    {
+        print "done\n";
+    }
+    elsif ($Res eq $NACK)
+    {
+        print "FAILED\n";
+        goto Fine;
+    }
+}
+
+
 #__________________________________________________________________Program Flash
 if ($optProgram ne "")
 {
@@ -380,14 +420,16 @@ if ($optProgram ne "")
     my $len;
     my $offset;
     my $DonePages = 0;
+    my $sendstr;
 
     my $TOP_ADDR = 0xF800;          # 62Kb
+    my $endaddr = 0x00;
 
 
-    # Fill the ROM with "00"
+    # Fill the ROM with "FF"
     for ($i = 0 ; $i < $TOP_ADDR; $i++)
     {
-        $strRomImage[$i] = "00";
+        $strRomImage[$i] = "FF";
     }
 
     # Open firmware file and read it
@@ -414,6 +456,7 @@ if ($optProgram ne "")
                     if (($offset + $i) < $TOP_ADDR)
                     {
                         $strRomImage[$offset + $i] = substr($riga, (9 + ($i * 2)), 2);
+                        $endaddr = $offset + $i + 1 if ($endaddr < $offset + $i);
                     }
                     else
                     {
@@ -433,10 +476,63 @@ if ($optProgram ne "")
         goto Fine;
     }
 
-    # Program micro
-    print "Programming device flash ROM ...";
+    $i = 0;
+
+    print "Programming device flash ROM in quick mode: ";
     system;
-    for ($i = 0; $i < $TOP_ADDR; $i += $RecLen)
+    for (; $i < $endaddr; $i += $QuickRecLen)
+    {
+        last if $i > 0xFFFF; # Quick mode have only 1 byte for page number
+        $riga = "";
+        
+        $isTobeProg = 0;
+        for ($g = 0; $g < $QuickRecLen; $g++)
+        {
+            $riga = $riga.$strRomImage[$i + $g];
+            if (!$isTobeProg && $strRomImage[$i + $g] ne "FF")
+            {
+                $isTobeProg = 1;
+            }
+        }
+        
+        # If it is a page to be programmed, send it
+        if ($isTobeProg)
+        {
+            $riga = &strAddCheckSum(strDecToHex8($i>>8).$riga);
+            $sendstr = chr(0x07).chr(0x51); # Q
+            for ($g = 0; $g < length($riga); $g += 2)
+            {
+                $sendstr .= chr(hex(substr($riga, $g, 2)));
+            }
+            $ob->write($sendstr);
+            system;
+            
+            $Res = &strWaitACK();
+            if ($Res eq $ACK)
+            {
+                print ".";
+                $DonePages += 1;
+            }
+            elsif ($Res eq $NACK)
+            {
+                print " NACK\nProgramming Chip: failed\n";
+                goto Fine;
+            }
+            else
+            {
+                print " X\nUnknown response - aborting\n";
+                goto Fine;
+            }
+        }
+    }
+    $DonePages *= $QuickRecLen;
+    print " done ($DonePages bytes)\n";
+
+    # Program micro
+    $DonePages = 0;
+    print "Programming device flash ROM with slow proto ...";
+    system;
+    for (; $i < $endaddr; $i += $RecLen)
     {
         $offset = strDecToHex24($i);
         $len = strDecToHex8($RecLen+4);         # includes command and 24bit address
@@ -446,7 +542,7 @@ if ($optProgram ne "")
         for ($g = 0; $g < $RecLen; $g++)
         {
             $riga = $riga.$strRomImage[$i + $g];
-            if ($strRomImage[$i + $g] ne "00")
+            if ($strRomImage[$i + $g] ne "FF")
             {
                 $isTobeProg = 1;
             }
@@ -457,14 +553,12 @@ if ($optProgram ne "")
         {
             # The "system" calls are needed for some USB/RS232 converters (i.e. FTDI)
             $riga = &strAddCheckSum($riga);
-            $ob->write(chr(0x07));
-            system;
-            $ob->write(chr(0x0E));
+            $sendstr = chr(0x07).chr(0x0E);
             for ($g = 0; $g < length($riga); $g += 2)
             {
-                system;
-                $ob->write(chr(hex(substr($riga, $g, 2))));
+                $sendstr .= chr(hex(substr($riga, $g, 2)));
             }
+            $ob->write($sendstr);
             system;
             
             $Res = &strWaitACK();
@@ -506,13 +600,15 @@ if ($optData ne "")
     my $riga;
     my $len;
     my $offset;
+    my $sendstr;
 
     my $TOP_ADDR = 0x1000;          # 4Kb
+    my $endaddr = 0x00;
 
     # Fill the ROM with "00"
     for ($i = 0 ; $i < $TOP_ADDR; $i++)
     {
-        $strRomImage[$i] = "00";
+        $strRomImage[$i] = "FF";
     }
 
     # Open data file (hex) and read it
@@ -539,6 +635,7 @@ if ($optData ne "")
                     if (($offset + $i) < $TOP_ADDR)
                     {
                         $strRomImage[$offset + $i] = substr($riga, (9 + ($i * 2)), 2);
+                        $endaddr = $offset + $i + 1 if ($endaddr < $offset + $i);
                     }
                     else
                     {
@@ -559,7 +656,7 @@ if ($optData ne "")
 
     # Program data
     print "Programming device data ROM ...";
-    for ($i = 0; $i < $TOP_ADDR; $i += $DataPageLen)
+    for ($i = 0; $i < $endaddr; $i += $DataPageLen)
     {
         $offset = strDecToHex24($i/4);          # page offset !!!
         $len = strDecToHex8($DataPageLen+4);    # includes command and 24bit address
@@ -569,7 +666,7 @@ if ($optData ne "")
         for ($g = 0; $g < $DataPageLen; $g++)
         {
             $riga = $riga.$strRomImage[$i + $g];
-            if ($strRomImage[$i + $g] ne "00")
+            if ($strRomImage[$i + $g] ne "FF")
             {
                 $isTobeProg = 1;
             }
@@ -579,12 +676,13 @@ if ($optData ne "")
         if ($isTobeProg)
         {
             $riga = &strAddCheckSum($riga);
-            $ob->write(chr(0x07));
-            $ob->write(chr(0x0E));
+            $sendstr = chr(0x07).chr(0x0E);
             for ($g = 0; $g < length($riga); $g += 2)
             {
-                $ob->write(chr(hex(substr($riga, $g, 2))));
+                $sendstr .= chr(hex(substr($riga, $g, 2)));
             }
+            $ob->write($sendstr);
+            system;
             
             $Res = &strWaitACK();
             if ($Res eq $ACK)
@@ -665,13 +763,6 @@ if ($optBootload ne "")
 }
 
 
-#_______________________________________________________________Program Security
-if ($optSecurity ne "")
-{
-    print "Security programming not available yet - under development\n";
-}
-
-
 #____________________________________________________________________Run Program
 if ($optRun ne "")
 {
@@ -724,7 +815,7 @@ sub strWaitResponse
 # Wait for a response with timeout
 # ------------------------------------------------------------------------------
 {
-my $timeout = 20;
+my $timeout = shift || 20;
 my $chars = 0;
 my $buffer = "";
 my @SplitBuf;
