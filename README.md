@@ -35,6 +35,9 @@ See the aduc8xx.txt in the distribution for detailed info; here below the --help
     aduc8xx.pl --detect --program dummy.hex --quickmode 8309,57600
       Erase chip, program it @57600baud (quickmode for ADuC842@32KHz)
 
-[PRECMA S.r.l.](http://www.precma.com) - Fausto Marzoli
+Author: Fausto Marzoli, [PRECMA S.r.l.](http://www.precma.com)
+Contributors:
+- Fausto Marzoli
+- Anton Fedorov
 
 [Mirror repository](https://github.com/datacompboy/aduc8xx) on GIT.
