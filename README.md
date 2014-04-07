@@ -9,6 +9,7 @@ Needs perl module [Device::SerialPort](http://sendpage.org/device-serialport)
 **Supported devices**: ADUC812, ADUC814, ADUC816, ADUC824, ADUC831, ADUC832, ADUC834, ADUC836, ADUC841, ADUC842, ADUC843, ADUC845, ADUC847, ADUC848
 
 See the aduc8xx.txt in the distribution for detailed info; here below the --help output of the program:
+
     # aduc8xx.pl --help
     ADuC8xx Programmer Version 1.3 (140401) - Copyright 2005-2014 PRECMA S.r.l.
     Usage: aduc8xx [--opt1 [arg1[,arg2]] ... --optn [arg1[,arg2]]]
