@@ -3,18 +3,21 @@
 #   PRECMA S.r.l.  -  Electronic Engineering  -  http://www.precma.com
 #       Progettazione Elettronica Controlli di Macchine Automatiche
 #
-# ADuC842 Downloader
-# In System Analog Devices AD842 (and others) microcontrollers programmer
+# ADuC842 Firmware Uploader
+# Analog Devices AD842 microcontroller (and others) In System Programmer (ISP)
 # Using perl module Device::SerialPort (http://sendpage.org/device-serialport/)
 #
-# Developed under Linux (SuSE 9.2 - 10.2 - 10.3); works with Windows, too (using
-# Win32::SerialPort module)
+# Developed under Linux; works with Windows, too (using Win32::SerialPort)
 #
+# Author: Fausto Marzoli <faumarz@gmail.com>
+# Copyright (C)2005-2014 PRECMA S.r.l. [http://www.precma.com]
+# Contributors:
+# Anton Fedorov <datacompboy@call2ru.com>: Version 1.3
 # -----------------------------------------------------------------------------
 # Version 1.3 (140401)
 # Added security options
-# Quick download protocol
-# Detect using several baudrates (allow to re-connect after quick mode without reset)
+# Fast download protocol
+# Detect using several baudrates (allow to re-connect after fast mode without reset)
 # -----------------------------------------------------------------------------
 # Version 1.2 (140114)
 # Better support for some USB/RS232 converters
@@ -52,12 +55,7 @@
 # -----------------------------------------------------------------------------
 # Version 0.1 (051009)
 # First release
-# -----------------------------------------------------------------------------
-# Fausto Marzoli - faumarz@8052.it
-# Copyright (C)2005-2008 PRECMA S.r.l. - http://www.precma.com/
 # ******************************************************************************
-
-
 use strict;
 use vars qw( $OS_win $ob );
 use Getopt::Long;
@@ -83,7 +81,7 @@ BEGIN
 #______________________________________________________________________Variables
 my $Prog = "ADuC8xx Programmer";
 my $Ver = "Version 1.3 (140401)";
-my $Copyright = "Copyright 2005-2014 PRECMA Srl";
+my $Copyright = "Copyright 2005-2014 PRECMA S.r.l.";
 my $Use = "Usage: aduc8xx [--opt1 [arg1[,arg2]] ... --optn [arg1[,arg2]]]";
 
 my $CfgFile = "$ENV{HOME}/.aduc8xx.cfg";
@@ -103,8 +101,8 @@ my $optBootload;
 my $Res;
 my @strRomImage;
 my $RecLen = 0x10;              # 16 bytes programming record
-my $QuickRecLen = 0x100;        # 256 bytes block in quick mode
-my $DataPageLen = 0x04;         #  4 bytes data record
+my $QuickRecLen = 0x100;        # 256 bytes block in fast mode
+my $DataPageLen = 0x04;         # 4 bytes data record
 
 my $ACK = 0x06;
 my $NACK = 0x07;
@@ -478,11 +476,11 @@ if ($optProgram ne "")
 
     $i = 0;
 
-    print "Programming device flash ROM in quick mode: ";
+    print "Programming device flash ROM in fast mode: ";
     system;
     for (; $i < $endaddr; $i += $QuickRecLen)
     {
-        last if $i > 0xFFFF; # Quick mode have only 1 byte for page number
+        last if $i > 0xFFFF; # Fast mode have only 1 byte for page number
         $riga = "";
         
         $isTobeProg = 0;
