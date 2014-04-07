@@ -2,16 +2,13 @@
 
 Analog Devices AD8xx family microcontrollers In System Programmer (ISP)
 
-[PRECMA S.r.l.](http://www.precma.com) - Fausto Marzoli
-
 [aduc8xx home](http://www.precma.com/adux8xx_loader.htm)
 
 Needs perl module [Device::SerialPort](http://sendpage.org/device-serialport)
 
-Check download section if you want to get the latest release.
+**Supported devices**: ADUC812, ADUC814, ADUC816, ADUC824, ADUC831, ADUC832, ADUC834, ADUC836, ADUC841, ADUC842, ADUC843, ADUC845, ADUC847, ADUC848
 
-**Supported devices**: ADUC812, ADUC814, ADUC816, ADUC824, ADUC831, ADUC832, ADUC834, ADUC836, ADUC841, ADUC842, ADUC843, ADUC845, ADUC847, ADUC848; see the aduc8xx.txt in the distribution for detailed info.
-
+See the aduc8xx.txt in the distribution for detailed info; here below the --help output of the program:
     # aduc8xx.pl --help
     ADuC8xx Programmer Version 1.3 (140401) - Copyright 2005-2014 PRECMA S.r.l.
     Usage: aduc8xx [--opt1 [arg1[,arg2]] ... --optn [arg1[,arg2]]]
@@ -37,4 +34,6 @@ Check download section if you want to get the latest release.
     aduc8xx.pl --detect --program dummy.hex --quickmode 8309,57600
       Erase chip, program it @57600baud (quickmode for ADuC842@32KHz)
 
-[Mirror repository](https://github.com/datacompboy/aduc8) on GIT.
+[PRECMA S.r.l.](http://www.precma.com) - Fausto Marzoli
+
+[Mirror repository](https://github.com/datacompboy/aduc8xx) on GIT.
