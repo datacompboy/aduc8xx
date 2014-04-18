@@ -44,4 +44,5 @@ See the aduc8xx.txt in the distribution for detailed info; here below the **--he
 - Fausto Marzoli
 - Anton Fedorov
 
+[Official repository](https://bitbucket.org/faumarz/aduc8xx) on BitBucket.
 [Mirror repository](https://github.com/datacompboy/aduc8xx) on GIT.
