@@ -40,6 +40,8 @@ If you use different, you should care of using available standard baud rates and
 Quickmode Option:
 The --quickmode option changes the baud rate from the bootloader default (usually 9600) to the given value. It can be used only in the derivates that can use Timer 3 for baud rate generation.
 
+If you try to program known chip with default crystal (i.e., when connection to bootloader initiated at 9600), settings for quickmode are detected and used automatically.
+
 The value is composed by two comma-separated strings:
 - The first string is the hex value of the registers T3CON+T3FD used for the baud rate generation; the values must be calculated as shown in the microcontroller datasheet (see the "Commonly used baud rates" table, if there is one).
 - The second string is the desired baud rate for the PC serial port
@@ -65,7 +67,7 @@ The ADuC842 bootloader use an internal value of 1 for the PLL configuration CPU 
 
 ----------------------------------------------------------
 Detect option
-The --detect option try to initiate a communication with the bootloader; default communication init. baud rate is 9600baud, but you can specify different baud rates.
+The --detect option try to initiate a communication with the bootloader; default communication init. baud rate is try to reset on 115200, and try 9600 baud after, but you can specify different baud rates.
 This can be used if your system uses a clock different from the standard clock for the derivate.
 NOTE: you MUST use a system clock than can produce a standard baud rate speed; non-standard baud rate are not supported.
 

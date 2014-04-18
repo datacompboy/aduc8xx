@@ -12,7 +12,11 @@
 # Author: Fausto Marzoli <faumarz@gmail.com>
 # Copyright (C)2005-2014 PRECMA S.r.l. [http://www.precma.com]
 # Contributors:
-# Anton Fedorov <datacompboy@call2ru.com>: Version 1.3
+# Anton Fedorov <datacompboy@call2ru.com>: Versions 1.3, 1.4
+# -----------------------------------------------------------------------------
+# Version 1.4 (140418)
+# Fixed defaults for detect, and option enabled by default now
+# Added automatic quickmode enable for known chips if we connected on default speed
 # -----------------------------------------------------------------------------
 # Version 1.3 (140401)
 # Added security options
@@ -93,12 +97,14 @@ my $optPort;
 my $optProgram;
 my $optData;
 my $optSecurity;
-my $optRun;
+my $optRun=-1;
 my $optQuickmode;
 my $optDetect;
 my $optBootload;
 
 my $Res;
+my $Chip = ""; # Detected chip
+my $BaudRate; # current working baudrate
 my @strRomImage;
 my $RecLen = 0x10;              # 16 bytes programming record
 my $QuickRecLen = 0x100;        # 256 bytes block in fast mode
@@ -108,6 +114,19 @@ my $ACK = 0x06;
 my $NACK = 0x07;
 my $TOP_ADDR;
 
+#_________________________________________________________________Known chips DB
+my %quickModeDb = (
+    "ADI 832" => "8209,115200",
+    "ADI 834" => "812D,115200",
+    "ADI 836" => "812D,115200",
+    "ADI 842" => "8209,115200",
+    "ADI 843" => "8209,115200",
+    "ADI 844" => "812D,115200",
+    "ADI 845" => "812D,115200",
+    "ADI 846" => "812D,115200",
+    "ADI 847" => "812D,115200",
+    "ADI 848" => "812D,115200",
+);
 
 #________________________________________________________________Welcome message
 print "$Prog $Ver - $Copyright\n";
@@ -132,7 +151,7 @@ print "$Prog $Ver - $Copyright\n";
             "data=s"=>\$optData,
             "security:4"=>\$optSecurity,
             "bootload=s"=>\$optBootload,
-            "run=s"=>\$optRun,
+            "run:s"=>\$optRun,
             "port=s"=>\$optPort
             );
 
@@ -142,21 +161,24 @@ if ($optHelp)
     print "$Use
 --help             Show options
 --detect [baud]    Try to initiate the communication at the given baudrate
-  (default 9600baud, setting depends on your system clock - see aduc8xx.txt)
+  (default 115200,9600, setting depends on your system clock - see aduc8xx.txt)
 --eflash           Erase Flash Memory
 --echip            Erase Flash & Data Memory
 --quickmode s,b    Change the programming baud rate: s=T3CON:T3FD b=baudrate
-  (available for the Timer 3 enabled derivates only - see aduc8xx.txt)
+  (available for the Timer 3 enabled derivates only - see aduc8xx.txt
+   automatically enabled on default quartz speeds if module supports it)
 --program hexfile  Program in the flash ROM the given hexfile
 --data hexfile     Program in the data ROM the given hexfile
 --security [mode]  Set Security mode (6=LOCK, 5=SECURE, 4=LOCK+SECURE (default),
                    3=SERIAL SAFE, 2=SERIAL SAFE+LOCK, 1=SERIAL SAFE+SECURE,
                    0=SERIAL SAFE+SECURE+LOCK)
 --bootload [E/D]   Enable (E) or disable (D) the custom bootloader startaddress
---run hexaddr      Execute user code from addr (hex)
+--run [hexaddr]    Execute user code from addr (hex, default 0)
 --port p           Define serial port to use (i.e. /dev/ttyS0)
 Bootloader is initiated by the --detect option and stopped by the --run option
 Examples:
+aduc8xx.pl --program dummy.hex --run
+  Connect at 9600, switch to 115200 if chip supports, erase&program&run 0
 aduc8xx.pl --detect --echip --program dummy.hex --run 0
   Erase chip, program it \@9600baud and start the code
 aduc8xx.pl --detect --program dummy.hex --quickmode 8309,57600
@@ -210,6 +232,10 @@ $Res = $ob->read(255);
 
 
 #___________________________________________________________Check for the device
+if ($optDetect eq "")
+{
+    $optDetect = "115200,9600";
+}
 if ($optDetect ne "")
 {
 my @SplitArg;
@@ -232,6 +258,7 @@ my $i;
 
         $ob->write("!Z".chr(0x00).chr(0xA6));
         $Res = &strWaitResponse(1);
+        $BaudRate = $SplitArg[$i];
         last if ($Res ne "");
     }
     if ($Res eq "")
@@ -241,6 +268,8 @@ my $i;
     }
     else
     {
+        $Chip = substr($Res,0,10);
+        $Chip =~ s/\s+$//;
         print "done. Connected device: $Res\n";
         system;
         # Gets the other 10 bytes of the start string (clears the buffer)
@@ -331,21 +360,28 @@ if ($optEchip)
 }
 system;
 
-
+if ($optQuickmode eq "none")
+{
+    $optQuickmode = "";
+}
+elsif ($optQuickmode eq "" && $BaudRate==9600)
+{
+    $optQuickmode = $quickModeDb{$Chip} if (defined($quickModeDb{$Chip}));
+}
 if ($optQuickmode ne "")
 {
 my $riga;
 my $g;
 my @SplitArg;
 my $SFR_setting;
-my $BaudRate;
-
-    print "Setting Quickmode baud rate ... ";
-    system;
+my $newBaudRate = $SplitArg[1];
 
     @SplitArg = split(",", $optQuickmode);
     $SFR_setting = $SplitArg[0];
-    $BaudRate = $SplitArg[1];
+    $newBaudRate = $SplitArg[1];
+
+    print "Setting Quickmode baud rate $newBaudRate ... ";
+    system;
 
     # Set the baud rate to 57600
     #       len  Cmd  T3CON+T3FD
@@ -361,6 +397,7 @@ my $BaudRate;
     $Res = &strWaitACK();
     if ($Res eq $ACK)
     {
+        $BaudRate = $newBaudRate;
         $ob->baudrate($BaudRate) || die "Fail setting serial port baud rate";
         $ob->write_settings      || die "No serial port settings";
         print "done\n";
@@ -762,6 +799,13 @@ if ($optBootload ne "")
 
 
 #____________________________________________________________________Run Program
+if ($optRun eq "")
+{
+    $optRun = "0";
+}
+elsif ($optRun < 0) {
+    $optRun = "";
+}
 if ($optRun ne "")
 {
     my $riga;
@@ -772,7 +816,7 @@ if ($optRun ne "")
 
     $riga = &strAddCheckSum($riga);
 
-    print "Remote RUN ... ";
+    print "Remote RUN from $optRun ... ";
 
     $ob->write(chr(0x07));
     $ob->write(chr(0x0E));
