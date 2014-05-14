@@ -10,60 +10,64 @@
 # Developed under Linux; works with Windows, too (using Win32::SerialPort)
 #
 # Author: Fausto Marzoli <faumarz@gmail.com>
-# Copyright (C)2005-2014 PRECMA S.r.l. [http://www.precma.com]
-# Contributors:
-# Anton Fedorov <datacompboy@call2ru.com>: Versions 1.3, 1.4
+# Contributor: Anton Fedorov <datacompboy@call2ru.com>
+my $Ver = "Version 1.5 (140508)";
+my $Copyright = "Copyright (C)2005-2014 PRECMA S.r.l. [http://www.precma.com]";
 # -----------------------------------------------------------------------------
-# Version 1.4 (140418)
+# Version 1.5 (140508) - Fausto Marzoli
+# USB latency workaround for some adaptors on some (linux?) systems
+# Virtual COM ports name workaround on windows systems
+# -----------------------------------------------------------------------------
+# Version 1.4 (140418) - Anton Fedorov
 # Fixed defaults for detect, and option enabled by default now
 # Added automatic quickmode enable for known chips if we connected on default speed
 # -----------------------------------------------------------------------------
-# Version 1.3 (140401)
+# Version 1.3 (140401) - Anton Fedorov
 # Added security options
 # Fast download protocol
 # Detect using several baudrates (allow to re-connect after fast mode without reset)
 # -----------------------------------------------------------------------------
-# Version 1.2 (140114)
+# Version 1.2 (140114) - Fausto Marzoli
 # Better support for some USB/RS232 converters
 # -----------------------------------------------------------------------------
-# Version 1.1 (090707)
+# Version 1.1 (090707) - Fausto Marzoli
 # Support for some USB/RS232 converters (FTDI)
 # -----------------------------------------------------------------------------
-# Version 1.0 (080711)
+# Version 1.0 (080711) - Fausto Marzoli
 # Thanks to Peter Gaus for bugfix in data ROM programming and +/- 1 problem 
 # with variable $TOP_ADDR
 # -----------------------------------------------------------------------------
-# Version 0.9 (070703)
+# Version 0.9 (070703) - Fausto Marzoli
 # Reduced dots output to speed up in windows mode
 # -----------------------------------------------------------------------------
-# Version 0.8 (070415)
+# Version 0.8 (070415) - Fausto Marzoli
 # Enhanced programming speed: 32K in ~25sec instead of ~42sec
 # -----------------------------------------------------------------------------
-# Version 0.7 (060418)
+# Version 0.7 (060418) - Fausto Marzoli
 # "Enable Custom Bootloader" Command
 # -----------------------------------------------------------------------------
-# Version 0.6 (051216)
+# Version 0.6 (051216) - Fausto Marzoli
 # Detect option
 # -----------------------------------------------------------------------------
-# Version 0.5 (051213)
+# Version 0.5 (051213) - Fausto Marzoli
 # Quickmode; goto Fine instead of exit;
 # -----------------------------------------------------------------------------
-# Version 0.4 (051213)
+# Version 0.4 (051213) - Fausto Marzoli
 # Always erase before programming
 # -----------------------------------------------------------------------------
-# Version 0.3 (051108)
+# Version 0.3 (051108) - Fausto Marzoli
 # Speed up initial checks
 # -----------------------------------------------------------------------------
-# Version 0.2 (051028)
+# Version 0.2 (051028) - Fausto Marzoli
 # Try to support OSX
 # -----------------------------------------------------------------------------
-# Version 0.1 (051009)
+# Version 0.1 (051009) - Fausto Marzoli
 # First release
 # ******************************************************************************
 use strict;
 use vars qw( $OS_win $ob );
 use Getopt::Long;
-
+use Time::HiRes qw(usleep);
 
 #_______________________________________________________________________OS Check
 BEGIN
@@ -84,8 +88,6 @@ BEGIN
 
 #______________________________________________________________________Variables
 my $Prog = "ADuC8xx Programmer";
-my $Ver = "Version 1.3 (140401)";
-my $Copyright = "Copyright 2005-2014 PRECMA S.r.l.";
 my $Use = "Usage: aduc8xx [--opt1 [arg1[,arg2]] ... --optn [arg1[,arg2]]]";
 
 my $CfgFile = "$ENV{HOME}/.aduc8xx.cfg";
@@ -114,6 +116,9 @@ my $ACK = 0x06;
 my $NACK = 0x07;
 my $TOP_ADDR;
 
+my $latency = 35;               # USB latency workaround for some adaptors on some systems (ms)
+
+
 #_________________________________________________________________Known chips DB
 my %quickModeDb = (
     "ADI 832" => "8209,115200",
@@ -129,7 +134,8 @@ my %quickModeDb = (
 );
 
 #________________________________________________________________Welcome message
-print "$Prog $Ver - $Copyright\n";
+print "$Prog $Ver\n";
+print "$Copyright\n";
 
 
 #_________________________________________________________________Argument Check
@@ -192,6 +198,7 @@ goto Fine;
 if ($optPort ne "")
 {
     if ($OS_win) {
+        $optPort = "\\\\.\\"."$optPort";
         $ob = Win32::SerialPort->new ("$optPort");
     }
     else {
@@ -256,8 +263,8 @@ my $i;
         $ob->baudrate($SplitArg[$i]) || die "Fail setting serial port baud rate";
         $ob->write_settings          || die "No serial port settings";
 
-        $ob->write("!Z".chr(0x00).chr(0xA6));
-        $Res = &strWaitResponse(1);
+        SendString("!Z".chr(0x00).chr(0xA6));
+        $Res = &strWaitResponse(5);
         $BaudRate = $SplitArg[$i];
         last if ($Res ne "");
     }
@@ -304,12 +311,7 @@ if ($optEflash)
 {
     print "Erasing Flash ROM ... ";
     system;
-#     $ob->write(chr(0x07));
-#     $ob->write(chr(0x0E));
-#     $ob->write(chr(0x01));
-#     $ob->write("C");
-#     $ob->write(chr(0xBC));
-    $ob->write(chr(0x07).chr(0x0E).chr(0x01)."C".chr(0xBC));
+    SendString(chr(0x07).chr(0x0E).chr(0x01)."C".chr(0xBC));
     $Res = &strWaitACK();
 
     if ($Res eq $ACK)
@@ -335,12 +337,7 @@ if ($optEchip)
 {
     print "Erasing Flash & Data ROM ... ";
     system;
-#~     $ob->write(chr(0x07));
-#~     $ob->write(chr(0x0E));
-#~     $ob->write(chr(0x01));
-#~     $ob->write("A");
-#~     $ob->write(chr(0xBE));
-    $ob->write(chr(0x07).chr(0x0E).chr(0x01)."A".chr(0xBE));
+    SendString(chr(0x07).chr(0x0E).chr(0x01)."A".chr(0xBE));
     $Res = &strWaitACK();
 
     if ($Res eq $ACK)
@@ -387,11 +384,11 @@ my $newBaudRate = $SplitArg[1];
     #       len  Cmd  T3CON+T3FD
     $riga = "03"."42".$SFR_setting;              # "42" is the hex ascii code for 'B'
     $riga = &strAddCheckSum($riga);
-    $ob->write(chr(0x07));
-    $ob->write(chr(0x0E));
+    SendString(chr(0x07));
+    SendString(chr(0x0E));
     for ($g = 0; $g < length($riga); $g += 2)
     {
-        $ob->write(chr(hex(substr($riga, $g, 2))));
+        SendString(chr(hex(substr($riga, $g, 2))));
     }
 
     $Res = &strWaitACK();
@@ -430,7 +427,7 @@ my $sendstr;
     {
         $sendstr .= chr(hex(substr($riga, $g, 2)));
     }
-    $ob->write($sendstr);
+    SendString($sendstr);
 
     $Res = &strWaitACK();
     if ($Res eq $ACK)
@@ -539,8 +536,7 @@ if ($optProgram ne "")
             {
                 $sendstr .= chr(hex(substr($riga, $g, 2)));
             }
-            $ob->write($sendstr);
-            system;
+            SendString($sendstr);
             
             $Res = &strWaitACK();
             if ($Res eq $ACK)
@@ -593,8 +589,7 @@ if ($optProgram ne "")
             {
                 $sendstr .= chr(hex(substr($riga, $g, 2)));
             }
-            $ob->write($sendstr);
-            system;
+            SendString($sendstr);
             
             $Res = &strWaitACK();
             if ($Res eq $ACK)
@@ -716,8 +711,7 @@ if ($optData ne "")
             {
                 $sendstr .= chr(hex(substr($riga, $g, 2)));
             }
-            $ob->write($sendstr);
-            system;
+            SendString($sendstr);
             
             $Res = &strWaitACK();
             if ($Res eq $ACK)
@@ -752,11 +746,11 @@ if ($optBootload ne "")
         print "Enabling Custom Bootloader Start Address ... ";
         $riga = "02"."46"."FE";              # "46" is the hex ascii code for 'F'
         $riga = &strAddCheckSum($riga);
-        $ob->write(chr(0x07));
-        $ob->write(chr(0x0E));
+        SendString(chr(0x07));
+        SendString(chr(0x0E));
         for ($g = 0; $g < length($riga); $g += 2)
         {
-            $ob->write(chr(hex(substr($riga, $g, 2))));
+            SendString(chr(hex(substr($riga, $g, 2))));
         }
         $Res = &strWaitACK();
         if ($Res eq $ACK)
@@ -774,11 +768,11 @@ if ($optBootload ne "")
         print "Disabling Custom Bootloader Start Address ... ";
         $riga = "02"."46"."FF";              # "46" is the hex ascii code for 'F'
         $riga = &strAddCheckSum($riga);
-        $ob->write(chr(0x07));
-        $ob->write(chr(0x0E));
+        SendString(chr(0x07));
+        SendString(chr(0x0E));
         for ($g = 0; $g < length($riga); $g += 2)
         {
-            $ob->write(chr(hex(substr($riga, $g, 2))));
+            SendString(chr(hex(substr($riga, $g, 2))));
         }
         $Res = &strWaitACK();
         if ($Res eq $ACK)
@@ -818,11 +812,11 @@ if ($optRun ne "")
 
     print "Remote RUN from $optRun ... ";
 
-    $ob->write(chr(0x07));
-    $ob->write(chr(0x0E));
+    SendString(chr(0x07));
+    SendString(chr(0x0E));
     for ($g = 0; $g < length($riga); $g += 2)
     {
-        $ob->write(chr(hex(substr($riga, $g, 2))));
+        SendString(chr(hex(substr($riga, $g, 2))));
     }
 
     $Res = &strWaitACK();
@@ -851,20 +845,30 @@ exit;
 
 
 
+sub SendString
+# ------------------------------------------------------------------------------
+# Send a string on the serial bus
+# ------------------------------------------------------------------------------
+{
+    $ob->write(shift);
+    system;
+    usleep(1000*$latency);
+}
+
 
 sub strWaitResponse
 # ------------------------------------------------------------------------------
 # Wait for a response with timeout
 # ------------------------------------------------------------------------------
 {
-my $timeout = shift || 20;
+my $timeout = shift || 10;
 my $chars = 0;
 my $buffer = "";
 my @SplitBuf;
 
     $ob->read_interval(100) if ($OS_win);
     $ob->read_const_time(50);
-    $ob->read_char_time(1);
+    $ob->read_char_time(0);
 
     while ($timeout > 0)
     {

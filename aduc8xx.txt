@@ -27,7 +27,12 @@ or Win32::SerialPort (http://members.aol.com/Bbirthisel/alpha.html)
 
 To install the perl module, download it the run "perl Makefile.PL" and "perl install.pl".
 Under Linux: "perl Makefile.PL" and "make && make install".
-Under Windows I used Active Perl with the optional module Win32/API (you can install it with the Active Perl Package Manager). Under Windows you can use the executable aduc8xx.exe, without the need to have perl installed.
+Under Windows I used Active Perl (http://www.activestate.com/activeperl) with the optional module Win32/API (you can install it with the Active Perl Package Manager).
+
+NOTE:
+Recently (2014) I installed Active Perl Community Edition 5.16.3.1604 on a Windows XP system and I did not found the Win32::SerialPort any more in the default packages repository; I had to add the external Bribes (http://www.bribes.org/perl/) packages repository and install it from it:
+# ppm repo add Bribes http://www.bribes.org/perl/ppm
+# ppm install Win32-SerialPort
 
 ----------------------------------------------------------
 IMPORTANT NOTE:
